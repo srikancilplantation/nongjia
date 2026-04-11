@@ -1,0 +1,249 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: yieldRecords
+    // Fields:
+    //   - date: string (ISO 8601)
+    //   - cropType: string (Durian, Oil Palm, Other Fruit)
+    //   - location: string
+    //   - quantity: number
+    //   - unit: string
+    //   - grade: string (optional)
+    //   - notes: string (optional)
+    //   - userId: string (required, owner)
+    //
+    // Collection: activityRecords
+    // Fields:
+    //   - date: string (ISO 8601)
+    //   - type: string (Fertilization, Herbicide, Fungicide, Other)
+    //   - cropType: string
+    //   - location: string
+    //   - materialUsed: string
+    //   - quantity: number
+    //   - unit: string
+    //   - area: string
+    //   - notes: string
+    //   - userId: string
+    //
+    // Collection: locations
+    // Fields:
+    //   - name: string
+    //   - description: string (optional)
+    //   - userId: string
+    //
+    // Collection: notes
+    // Fields:
+    //   - title: string
+    //   - content: string
+    //   - createdAt: string
+    //   - updatedAt: string
+    //   - userId: string
+    //   - color: string (optional)
+    //
+    // Collection: knowledgeBase
+    // Fields:
+    //   - title: string
+    //   - content: string
+    //   - category: string
+    //   - createdAt: string
+    //   - userId: string
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?.*Z?$");
+    }
+
+    function isValidYield(data) {
+      return data.keys().hasAll(['date', 'cropType', 'location', 'quantity', 'unit', 'userId']) &&
+             isValidDateString(data.date) &&
+             data.cropType is string && data.cropType.size() < 100 &&
+             data.location is string && data.location.size() < 200 &&
+             data.quantity is number && data.quantity >= 0 &&
+             data.unit is string && data.unit in ['kg', 'ton', 'basket'] &&
+             data.userId == request.auth.uid &&
+             (!('grade' in data) || (data.grade is string && data.grade.size() < 10)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 1000));
+    }
+
+    function isValidActivity(data) {
+      return data.keys().hasAll(['date', 'type', 'cropType', 'location', 'userId']) &&
+             isValidDateString(data.date) &&
+             data.type in ['Fertilization', 'Herbicide', 'Fungicide', 'FertilizerWater', 'BactericideWater', 'TraceElements', 'Other'] &&
+             data.cropType is string && data.cropType.size() < 100 &&
+             data.location is string && data.location.size() < 200 &&
+             data.userId == request.auth.uid &&
+             (!('materialUsed' in data) || (data.materialUsed is string && data.materialUsed.size() < 200)) &&
+             (!('quantity' in data) || (data.quantity is number && data.quantity >= 0)) &&
+             (!('unit' in data) || (data.unit is string && data.unit.size() < 50)) &&
+             (!('area' in data) || (data.area is string && data.area.size() < 100)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 1000)) &&
+             (!('status' in data) || (data.status in ['Pending', 'Completed']));
+    }
+
+    function isValidKnowledge(data) {
+      return data.keys().hasAll(['title', 'userId']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             (!('content' in data) || (data.content is string && data.content.size() < 1000000)) &&
+             (!('category' in data) || (data.category is string && data.category.size() < 100)) &&
+             (!('cropType' in data) || (data.cropType is string && data.cropType.size() < 100)) &&
+             (!('folderId' in data) || (data.folderId is string && data.folderId.size() < 100)) &&
+             (!('fileUrl' in data) || (data.fileUrl is string && data.fileUrl.size() < 2000)) &&
+             (!('fileName' in data) || (data.fileName is string && data.fileName.size() < 255)) &&
+             (!('fileType' in data) || (data.fileType is string && data.fileType.size() < 100)) &&
+             (!('createdAt' in data) || isValidDateString(data.createdAt)) &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidFolder(data) {
+      return data.keys().hasAll(['name', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.userId == request.auth.uid &&
+             (!('parentId' in data) || (data.parentId is string && data.parentId.size() < 100)) &&
+             (!('createdAt' in data) || isValidDateString(data.createdAt));
+    }
+
+    function isValidWeather(data) {
+      return data.keys().hasAll(['date', 'condition', 'userId']) &&
+             isValidDateString(data.date) &&
+             data.condition in ['Sunny', 'Rainy', 'Cloudy', 'Stormy'] &&
+             data.userId == request.auth.uid &&
+             (!('temperature' in data) || (data.temperature is number)) &&
+             (!('rainfall' in data) || (data.rainfall is number && data.rainfall >= 0)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 1000));
+    }
+
+    function isValidWorker(data) {
+      return data.keys().hasAll(['name', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.userId == request.auth.uid &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() < 20)) &&
+             (!('idNumber' in data) || (data.idNumber is string && data.idNumber.size() < 50)) &&
+             (!('nationality' in data) || (data.nationality is string && data.nationality.size() < 100)) &&
+             (!('joinDate' in data) || (data.joinDate is string && data.joinDate.size() < 50)) &&
+             (!('salary' in data) || (data.salary is number)) &&
+             (!('position' in data) || (data.position is string && data.position.size() < 100)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 2000)) &&
+             (!('active' in data) || (data.active is bool));
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['date', 'workerIds', 'cropType', 'userId']) &&
+             isValidDateString(data.date) &&
+             data.workerIds is list && data.workerIds.size() < 100 &&
+             data.cropType is string && data.cropType.size() < 100 &&
+             data.userId == request.auth.uid &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 1000));
+    }
+
+    function isValidCrop(data) {
+      return data.keys().hasAll(['name', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidLocation(data) {
+      return data.keys().hasAll(['name', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.userId == request.auth.uid &&
+             (!('description' in data) || (data.description is string && data.description.size() < 500));
+    }
+
+    function isValidNote(data) {
+      return data.keys().hasAll(['title', 'content', 'userId', 'createdAt', 'updatedAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.content is string && data.content.size() < 10000 &&
+             data.userId == request.auth.uid &&
+             isValidDateString(data.createdAt) &&
+             isValidDateString(data.updatedAt) &&
+             (!('color' in data) || (data.color is string && data.color.size() < 20)) &&
+             (!('isPinned' in data) || (data.isPinned is bool));
+    }
+
+    match /yieldRecords/{recordId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidYield(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidYield(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /activityRecords/{recordId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidActivity(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidActivity(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /knowledgeBase/{itemId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidKnowledge(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidKnowledge(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /knowledgeFolders/{folderId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidFolder(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidFolder(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /weatherRecords/{recordId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidWeather(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidWeather(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /workers/{workerId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidWorker(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidWorker(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /attendanceRecords/{recordId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidAttendance(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidAttendance(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /crops/{cropId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidCrop(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidCrop(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /locations/{locationId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidLocation(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidLocation(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /notes/{noteId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidNote(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidNote(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+  }
+}

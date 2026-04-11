@@ -1,0 +1,190 @@
+{
+  "entities": {
+    "yieldRecord": {
+      "title": "Yield Record",
+      "description": "Records of crop harvest yields",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time", "description": "Date of harvest" },
+        "cropType": { "type": "string", "description": "Type of crop" },
+        "location": { "type": "string", "description": "Location of harvest" },
+        "quantity": { "type": "number", "description": "Harvested quantity" },
+        "unit": { "type": "string", "enum": ["kg", "ton", "basket"], "description": "Unit of measurement" },
+        "grade": { "type": "string", "description": "Grade of the produce (e.g., A, B, C)" },
+        "notes": { "type": "string", "description": "Additional notes" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["date", "cropType", "location", "quantity", "unit", "userId"]
+    },
+    "activityRecord": {
+      "title": "Activity Record",
+      "description": "Records of farm activities like fertilization, spraying, etc.",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time", "description": "Date of activity" },
+        "type": { "type": "string", "enum": ["Fertilization", "Herbicide", "Fungicide", "Other"], "description": "Type of activity" },
+        "cropType": { "type": "string", "description": "Target crop" },
+        "location": { "type": "string", "description": "Location of activity" },
+        "materialUsed": { "type": "string", "description": "Name of fertilizer or chemical used" },
+        "quantity": { "type": "number", "description": "Quantity used" },
+        "unit": { "type": "string", "description": "Unit (e.g., kg, L, bag)" },
+        "area": { "type": "string", "description": "Area or block covered" },
+        "notes": { "type": "string", "description": "Additional notes" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["date", "type", "cropType", "location", "userId"]
+    },
+    "knowledgeItem": {
+      "title": "Knowledge Item",
+      "description": "Agricultural knowledge and tips",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the knowledge entry" },
+        "content": { "type": "string", "description": "Detailed content" },
+        "category": { "type": "string", "description": "Category (e.g., Pest Control, Soil Health)" },
+        "cropType": { "type": "string", "description": "Target crop" },
+        "folderId": { "type": "string", "description": "ID of the folder this item belongs to" },
+        "fileUrl": { "type": "string", "description": "URL to the uploaded file in Storage" },
+        "fileName": { "type": "string", "description": "Original file name" },
+        "fileType": { "type": "string", "description": "MIME type of the file" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation date" },
+        "userId": { "type": "string", "description": "Author of the entry" }
+      },
+      "required": ["title", "userId"]
+    },
+    "knowledgeFolder": {
+      "title": "Knowledge Folder",
+      "description": "Folders for organizing knowledge items",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Folder name" },
+        "parentId": { "type": "string", "description": "ID of the parent folder (null for root)" },
+        "userId": { "type": "string", "description": "Owner of the folder" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation date" }
+      },
+      "required": ["name", "userId"]
+    },
+    "crop": {
+      "title": "Crop",
+      "description": "Custom crop types defined by the user",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the crop" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["name", "userId"]
+    },
+    "weatherRecord": {
+      "title": "Weather Record",
+      "description": "Daily weather conditions",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time", "description": "Date of record" },
+        "condition": { "type": "string", "enum": ["Sunny", "Rainy", "Cloudy", "Stormy"], "description": "Weather condition" },
+        "temperature": { "type": "number", "description": "Temperature in Celsius" },
+        "rainfall": { "type": "number", "description": "Rainfall in mm" },
+        "notes": { "type": "string", "description": "Additional notes" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["date", "condition", "userId"]
+    },
+    "worker": {
+      "title": "Worker",
+      "description": "Farm workers",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Worker name" },
+        "phone": { "type": "string", "description": "Contact number" },
+        "idNumber": { "type": "string", "description": "IC or Passport number" },
+        "nationality": { "type": "string", "description": "Nationality" },
+        "joinDate": { "type": "string", "format": "date", "description": "Date of joining" },
+        "salary": { "type": "number", "description": "Monthly salary" },
+        "position": { "type": "string", "description": "Job position" },
+        "notes": { "type": "string", "description": "Additional notes about the worker" },
+        "active": { "type": "boolean", "description": "Whether the worker is currently active" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["name", "userId"]
+    },
+    "attendanceRecord": {
+      "title": "Attendance Record",
+      "description": "Daily attendance for workers",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time", "description": "Date of attendance" },
+        "workerIds": { "type": "array", "items": { "type": "string" }, "description": "List of worker IDs who worked" },
+        "cropType": { "type": "string", "description": "Target crop" },
+        "notes": { "type": "string", "description": "Additional notes" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["date", "workerIds", "cropType", "userId"]
+    },
+    "location": {
+      "title": "Location",
+      "description": "Farm locations or blocks",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the location" },
+        "description": { "type": "string", "description": "Description of the location" },
+        "userId": { "type": "string", "description": "Owner of the record" }
+      },
+      "required": ["name", "userId"]
+    },
+    "note": {
+      "title": "Note",
+      "description": "Personal notes and reminders",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the note" },
+        "content": { "type": "string", "description": "Content of the note" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation date" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update date" },
+        "userId": { "type": "string", "description": "Owner of the note" },
+        "color": { "type": "string", "description": "Color tag for the note" }
+      },
+      "required": ["title", "content", "userId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/yieldRecords/{recordId}": {
+      "schema": "yieldRecord",
+      "description": "Collection of harvest yield records"
+    },
+    "/activityRecords/{recordId}": {
+      "schema": "activityRecord",
+      "description": "Collection of farm activity records"
+    },
+    "/knowledgeBase/{itemId}": {
+      "schema": "knowledgeItem",
+      "description": "Collection of agricultural knowledge entries"
+    },
+    "/knowledgeFolders/{folderId}": {
+      "schema": "knowledgeFolder",
+      "description": "Collection of folders for knowledge base"
+    },
+    "/weatherRecords/{recordId}": {
+      "schema": "weatherRecord",
+      "description": "Collection of daily weather records"
+    },
+    "/workers/{workerId}": {
+      "schema": "worker",
+      "description": "Collection of farm workers"
+    },
+    "/attendanceRecords/{recordId}": {
+      "schema": "attendanceRecord",
+      "description": "Collection of daily attendance records"
+    },
+    "/crops/{cropId}": {
+      "schema": "crop",
+      "description": "Collection of custom crop types"
+    },
+    "/locations/{locationId}": {
+      "schema": "location",
+      "description": "Collection of farm locations"
+    },
+    "/notes/{noteId}": {
+      "schema": "note",
+      "description": "Collection of personal notes"
+    }
+  }
+}
