@@ -67,7 +67,8 @@ service cloud.firestore {
 
     function isValidDateString(dateStr) {
       return dateStr is string &&
-        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?.*Z?$");
+        (dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?.*Z?$") || 
+         dateStr.matches("^\\d{4}-\\d{2}-\\d{2}$"));
     }
 
     function isValidYield(data) {
@@ -85,7 +86,7 @@ service cloud.firestore {
     function isValidActivity(data) {
       return data.keys().hasAll(['date', 'type', 'cropType', 'location', 'userId']) &&
              isValidDateString(data.date) &&
-             data.type in ['Fertilization', 'Herbicide', 'Fungicide', 'FertilizerWater', 'BactericideWater', 'TraceElements', 'Other'] &&
+             data.type is string && data.type.size() > 0 && data.type.size() < 100 &&
              data.cropType is string && data.cropType.size() < 100 &&
              data.location is string && data.location.size() < 200 &&
              data.userId == request.auth.uid &&
@@ -95,6 +96,13 @@ service cloud.firestore {
              (!('area' in data) || (data.area is string && data.area.size() < 100)) &&
              (!('notes' in data) || (data.notes is string && data.notes.size() < 1000)) &&
              (!('status' in data) || (data.status in ['Pending', 'Completed']));
+    }
+
+    function isValidActivityType(data) {
+      return data.keys().hasAll(['name', 'color', 'userId']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.color is string && data.color.matches("^#[0-9a-fA-F]{6}$") &&
+             data.userId == request.auth.uid;
     }
 
     function isValidKnowledge(data) {
@@ -187,6 +195,13 @@ service cloud.firestore {
       allow read: if isOwner(resource.data.userId);
       allow create: if isAuthenticated() && isValidActivity(request.resource.data);
       allow update: if isOwner(resource.data.userId) && isValidActivity(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    match /activityTypes/{typeId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated() && isValidActivityType(request.resource.data);
+      allow update: if isOwner(resource.data.userId) && isValidActivityType(request.resource.data) && request.resource.data.userId == resource.data.userId;
       allow delete: if isOwner(resource.data.userId);
     }
 
