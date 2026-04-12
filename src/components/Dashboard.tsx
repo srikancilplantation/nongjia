@@ -19,7 +19,7 @@ import {
   Area
 } from 'recharts';
 import { TrendingUp, Package, Droplets, Calendar, Users, Thermometer, CloudRain, MapPin, ChevronRight, Sprout } from 'lucide-react';
-import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfYear } from 'date-fns';
+import { format, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfYear } from 'date-fns';
 import { useCrops } from '../hooks/useCrops';
 import { useLocations } from '../hooks/useLocations';
 import { Link } from 'react-router-dom';
@@ -104,12 +104,25 @@ export default function Dashboard({
   const filteredAttendance = attendance.filter(a => a.cropType === selectedCrop);
 
   const now = new Date();
+  
+  const getMonthData = (date: Date) => {
+    const interval = { start: startOfMonth(date), end: endOfMonth(date) };
+    const monthYield = filteredYields
+      .filter(y => isWithinInterval(parseISO(y.date), interval))
+      .reduce((sum, y) => sum + y.quantity, 0);
+    return {
+      label: format(date, 'M月'),
+      yield: monthYield
+    };
+  };
+
+  const lastThreeMonthsData = [
+    getMonthData(now),
+    getMonthData(subMonths(now, 1)),
+    getMonthData(subMonths(now, 2)),
+  ];
+
   const currentMonthInterval = { start: startOfMonth(now), end: endOfMonth(now) };
-
-  const currentMonthYield = filteredYields
-    .filter(y => isWithinInterval(parseISO(y.date), currentMonthInterval))
-    .reduce((sum, y) => sum + y.quantity, 0);
-
   const currentMonthAttendance = filteredAttendance
     .filter(a => isWithinInterval(parseISO(a.date), currentMonthInterval))
     .reduce((sum, a) => sum + a.workerIds.length, 0);
@@ -215,11 +228,27 @@ export default function Dashboard({
 
   return (
     <div className="space-y-8">
+      <div className="flex justify-between items-center print:hidden">
+        <div>
+          <h1 className="text-2xl font-bold text-emerald-950">管理分析仪表盘</h1>
+          <p className="text-emerald-600/60">实时监控农场核心指标与趋势</p>
+        </div>
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <StatCard 
-          title="产量 (本月)" 
-          value={`${currentMonthYield.toLocaleString()} kg`}
+          title="最近3个月产量明细" 
+          value={
+            <div className="space-y-1">
+              {lastThreeMonthsData.map((m, i) => (
+                <div key={i} className="flex justify-between items-center gap-4">
+                  <span className="text-sm font-bold text-emerald-800/60">{m.label}</span>
+                  <span className="text-lg font-black text-emerald-950">{m.yield.toFixed(3)} kg</span>
+                </div>
+              ))}
+            </div>
+          }
           icon={<TrendingUp className="text-emerald-600" />}
           trend={`${selectedCrop}`}
           color="emerald"
@@ -249,6 +278,7 @@ export default function Dashboard({
                 <Tooltip 
                   contentStyle={{ borderRadius: '16px', border: '1px solid #ecfdf5', boxShadow: '0 10px 25px -5px rgb(16 185 129 / 0.1)' }}
                   cursor={{ fill: '#f0fdf4' }}
+                  formatter={(value: number) => [`${value.toLocaleString()} kg`, '产量']}
                 />
                 <Bar dataKey="yield" name="产量 (kg)" fill="#10b981" radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -264,14 +294,23 @@ export default function Dashboard({
             <Package className="w-5 h-5 text-emerald-500" />
             各地点产量分析
           </h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height={320} minWidth={0} debounce={100}>
-              <BarChart data={yieldByLocation}>
+          <div className="h-96">
+            <ResponsiveContainer width="100%" height={380} minWidth={0} debounce={100}>
+              <BarChart data={yieldByLocation} margin={{ bottom: 100 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0fdf4" />
-                <XAxis dataKey="location" axisLine={false} tickLine={false} tick={{ fill: '#059669', fontSize: 10, opacity: 0.6 }} />
+                <XAxis 
+                  dataKey="location" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#059669', fontSize: 10, opacity: 0.6 }}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#059669', fontSize: 10, opacity: 0.6 }} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '16px', border: '1px solid #ecfdf5', boxShadow: '0 10px 25px -5px rgb(16 185 129 / 0.1)' }}
+                  formatter={(value: number) => [`${value.toFixed(3)} kg`]}
                 />
                 {monthNames.map((month, index) => (
                   <Bar 
@@ -301,6 +340,7 @@ export default function Dashboard({
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#059669', fontSize: 10, opacity: 0.6 }} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '16px', border: '1px solid #ecfdf5', boxShadow: '0 10px 25px -5px rgb(16 185 129 / 0.1)' }}
+                  formatter={(value: number) => [`${value} 天`]}
                 />
                 <Bar dataKey="Sunny" name="晴天" stackId="weather" fill="#f59e0b" />
                 <Bar dataKey="Cloudy" name="多云" stackId="weather" fill="#94a3b8" />
@@ -393,7 +433,7 @@ export default function Dashboard({
   );
 }
 
-function StatCard({ title, value, icon, trend, color }: { title: string, value: string, icon: React.ReactNode, trend: string, color: string }) {
+function StatCard({ title, value, icon, trend, color }: { title: string, value: string | React.ReactNode, icon: React.ReactNode, trend: string, color: string }) {
   const colorClasses = {
     emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
     amber: 'bg-amber-50 text-amber-600 border-amber-100',
@@ -410,8 +450,14 @@ function StatCard({ title, value, icon, trend, color }: { title: string, value: 
         <span className="text-[10px] font-bold text-emerald-800/40 uppercase tracking-widest">{title}</span>
       </div>
       <div className="flex items-end justify-between">
-        <h4 className="text-2xl font-black text-emerald-950">{value}</h4>
-        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${colorClasses}`}>
+        <div className="flex-1">
+          {typeof value === 'string' ? (
+            <h4 className="text-2xl font-black text-emerald-950">{value}</h4>
+          ) : (
+            value
+          )}
+        </div>
+        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${colorClasses} ml-4`}>
           {trend}
         </span>
       </div>
