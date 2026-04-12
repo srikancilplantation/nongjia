@@ -77,10 +77,10 @@ service cloud.firestore {
              data.cropType is string && data.cropType.size() < 100 &&
              data.location is string && data.location.size() < 200 &&
              data.quantity is number && data.quantity >= 0 &&
-             data.unit is string && data.unit in ['kg', 'ton', 'basket'] &&
+             data.unit is string && data.unit in ['kg', 'ton', 'basket', 'piece'] &&
              data.userId == request.auth.uid &&
-             (!('grade' in data) || (data.grade is string && data.grade.size() < 10)) &&
-             (!('notes' in data) || (data.notes is string && data.notes.size() < 1000));
+             (!('grade' in data) || (data.grade is string && data.grade.size() < 100)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 2000));
     }
 
     function isValidActivity(data) {
@@ -94,7 +94,7 @@ service cloud.firestore {
              (!('quantity' in data) || (data.quantity is number && data.quantity >= 0)) &&
              (!('unit' in data) || (data.unit is string && data.unit.size() < 50)) &&
              (!('area' in data) || (data.area is string && data.area.size() < 100)) &&
-             (!('notes' in data) || (data.notes is string && data.notes.size() < 1000)) &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() < 2000)) &&
              (!('status' in data) || (data.status in ['Pending', 'Completed']));
     }
 
@@ -175,8 +175,8 @@ service cloud.firestore {
 
     function isValidNote(data) {
       return data.keys().hasAll(['title', 'content', 'userId', 'createdAt', 'updatedAt']) &&
-             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
-             data.content is string && data.content.size() < 10000 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.content is string && data.content.size() <= 10000 &&
              data.userId == request.auth.uid &&
              isValidDateString(data.createdAt) &&
              isValidDateString(data.updatedAt) &&
