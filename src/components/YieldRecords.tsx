@@ -3,8 +3,8 @@ import { User } from 'firebase/auth';
 import { collection, addDoc, query, where, onSnapshot, orderBy, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { YieldRecord, OperationType } from '../types';
-import { handleFirestoreError } from '../utils';
-import { Plus, Trash2, Edit2, X, Save, TrendingUp, Calendar, Tag, Weight, MapPin, FileText, ChevronRight, ChevronDown, Printer } from 'lucide-react';
+import { handleFirestoreError, triggerPrint } from '../utils';
+import { Plus, Trash2, Edit2, X, Save, TrendingUp, Calendar, Tag, Weight, MapPin, FileText, ChevronRight, ChevronDown, Printer, Loader2 } from 'lucide-react';
 import { format, parseISO, getYear, getMonth } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocations } from '../hooks/useLocations';
@@ -25,6 +25,7 @@ export default function YieldRecords({
   const [view, setView] = useState<'list' | 'report'>('list');
   const [reportAllCrops, setReportAllCrops] = useState(false);
   const [reportYear, setReportYear] = useState<string>('All');
+  const [reportMonth, setReportMonth] = useState<string>('All');
   const [reportLocation, setReportLocation] = useState<string>('All');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -129,7 +130,8 @@ export default function YieldRecords({
       const cropMatch = reportAllCrops ? true : r.cropType === selectedCrop;
       const locationMatch = reportLocation === 'All' ? true : r.location === reportLocation;
       const yearMatch = reportYear === 'All' ? true : getYear(parseISO(r.date)).toString() === reportYear;
-      return cropMatch && locationMatch && yearMatch;
+      const monthMatch = reportMonth === 'All' ? true : (getMonth(parseISO(r.date)) + 1).toString() === reportMonth;
+      return cropMatch && locationMatch && yearMatch && monthMatch;
     })
     .reduce((acc: any, record) => {
       const date = parseISO(record.date);
@@ -167,17 +169,13 @@ export default function YieldRecords({
 
   const reportTotal = sortedReport.reduce((sum, row: any) => sum + row.totalQuantity, 0);
 
+  const [isPrinting, setIsPrinting] = useState(false);
+
   const handlePrint = () => {
-    console.log("Attempting to print...");
-    window.focus();
-    setTimeout(() => {
-      try {
-        window.print();
-      } catch (e) {
-        console.error("Print failed:", e);
-        alert("打印功能在当前预览窗口受限。请点击右上角按钮‘在新窗口打开’后再试。");
-      }
-    }, 200);
+    setIsPrinting(true);
+    triggerPrint();
+    // Reset printing state after a delay
+    setTimeout(() => setIsPrinting(false), 2000);
   };
 
   return (
@@ -188,7 +186,23 @@ export default function YieldRecords({
           <p className="text-emerald-600/60">记录您的农场每一次丰收</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
+          <div className="flex flex-col items-end">
+            <button
+              onClick={handlePrint}
+              disabled={isPrinting}
+              className={`p-2.5 bg-white text-emerald-600 rounded-2xl hover:bg-emerald-50 transition-all border border-emerald-100 shadow-sm flex items-center gap-2 ${isPrinting ? 'opacity-50' : ''}`}
+              title="打印当前视图"
+            >
+              {isPrinting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
+              {isPrinting && <span className="text-xs font-bold">准备打印...</span>}
+            </button>
+            {isPrinting && window.self !== window.top && (
+              <p className="text-[10px] text-amber-600 font-bold mt-2 animate-pulse print:hidden max-w-[150px] text-right">
+                提示：如果打印窗口未弹出，请点击右上角“在新窗口打开”后再试。
+              </p>
+            )}
+          </div>
           <div className="flex p-1 bg-emerald-100/50 rounded-xl border border-emerald-100">
             <button
               onClick={() => setView('list')}
@@ -348,7 +362,7 @@ export default function YieldRecords({
 
               <div className="h-8 w-[1px] bg-emerald-100 hidden md:block" />
 
-              <div className="flex items-center gap-4 flex-1 min-w-[300px]">
+              <div className="flex items-center gap-4 flex-1 min-w-[400px]">
                 <div className="flex-1 space-y-1">
                   <label className="text-[10px] font-black text-emerald-900/40 uppercase tracking-widest ml-1">筛选地点</label>
                   <select
@@ -379,15 +393,31 @@ export default function YieldRecords({
                     ))}
                   </select>
                 </div>
+
+                <div className="flex-1 space-y-1">
+                  <label className="text-[10px] font-black text-emerald-900/40 uppercase tracking-widest ml-1">筛选月份</label>
+                  <select
+                    value={reportMonth}
+                    onChange={(e) => setReportMonth(e.target.value)}
+                    className="w-full px-3 py-2 bg-emerald-50/50 border border-emerald-100 rounded-xl text-xs font-bold text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                  >
+                    <option value="All">全部月份</option>
+                    {Array.from({ length: 12 }, (_, i) => (i + 1).toString()).map(month => (
+                      <option key={month} value={month}>{month}月</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               
               <button
                 type="button"
                 onClick={handlePrint}
-                className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all border border-emerald-100 cursor-pointer"
+                disabled={isPrinting}
+                className={`p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all border border-emerald-100 cursor-pointer flex items-center gap-2 ${isPrinting ? 'opacity-50' : ''}`}
                 title="打印报告"
               >
-                <Printer className="w-5 h-5" />
+                {isPrinting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
+                {isPrinting && <span className="text-xs font-bold">准备打印...</span>}
               </button>
             </div>
 
@@ -395,7 +425,7 @@ export default function YieldRecords({
               <div>
                 <p className="text-[10px] font-black text-emerald-900/40 uppercase tracking-widest">筛选结果</p>
                 <p className="text-sm text-emerald-600 font-medium">
-                  {reportLocation === 'All' ? '全部地点' : reportLocation} · {reportYear === 'All' ? '全部年份' : `${reportYear}年`}
+                  {reportLocation === 'All' ? '全部地点' : reportLocation} · {reportYear === 'All' ? '全部年份' : `${reportYear}年`} · {reportMonth === 'All' ? '全部月份' : `${reportMonth}月`}
                 </p>
               </div>
               <div className="text-right">
@@ -441,7 +471,7 @@ export default function YieldRecords({
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-1 text-emerald-600">
-                          <span className="text-lg font-black">{row.totalQuantity.toLocaleString()}</span>
+                          <span className="text-lg font-black">{row.totalQuantity.toFixed(3)}</span>
                           <span className="text-xs font-bold">{row.unit}</span>
                         </div>
                       </td>
@@ -454,7 +484,7 @@ export default function YieldRecords({
                       </td>
                       <td className="px-6 py-4 text-right text-emerald-600">
                         <div className="flex items-center justify-end gap-1">
-                          <span className="text-xl">{reportTotal.toLocaleString()}</span>
+                          <span className="text-xl">{(reportTotal as number).toFixed(3)}</span>
                           <span className="text-xs">kg</span>
                         </div>
                       </td>
@@ -489,15 +519,15 @@ export default function YieldRecords({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden border border-emerald-50"
+              className="relative bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden border border-emerald-50 flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 border-b border-emerald-50 flex justify-between items-center bg-emerald-50/30">
+              <div className="p-6 border-b border-emerald-50 flex justify-between items-center bg-emerald-50/30 flex-shrink-0">
                 <h2 className="text-xl font-bold text-emerald-950">{editingId ? '编辑记录' : '新增收成记录'}</h2>
                 <button onClick={() => setIsModalOpen(false)} className="text-emerald-300 hover:text-emerald-600">
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
                 {submitError && (
                   <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs rounded-xl">
                     {submitError}
