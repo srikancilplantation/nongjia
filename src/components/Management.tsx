@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { User } from 'firebase/auth';
-import { Users, Sprout, MapPin, Trash2, AlertTriangle, RefreshCcw } from 'lucide-react';
+import { Users, Sprout, MapPin, Trash2, AlertTriangle, RefreshCcw, Beaker } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, getDocs, deleteDoc, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import WorkerManagement from './WorkerManagement';
 import CropManagement from './CropManagement';
 import LocationManagement from './LocationManagement';
+import ActivityTypeManagement from './ActivityTypeManagement';
 
-type Tab = 'workers' | 'crops' | 'locations' | 'reset';
+type Tab = 'workers' | 'crops' | 'locations' | 'activityTypes' | 'reset';
 
 export default function Management({ user }: { user: User }) {
   const [activeTab, setActiveTab] = useState<Tab>('workers');
@@ -19,6 +20,7 @@ export default function Management({ user }: { user: User }) {
     { id: 'workers' as const, label: '工人管理', icon: <Users className="w-5 h-5" /> },
     { id: 'crops' as const, label: '农作物管理', icon: <Sprout className="w-5 h-5" /> },
     { id: 'locations' as const, label: '地点管理', icon: <MapPin className="w-5 h-5" /> },
+    { id: 'activityTypes' as const, label: '活动类型', icon: <Beaker className="w-5 h-5" /> },
     { id: 'reset' as const, label: '系统重置', icon: <RefreshCcw className="w-5 h-5" /> },
   ];
 
@@ -31,10 +33,13 @@ export default function Management({ user }: { user: User }) {
       'yieldRecords',
       'weatherRecords',
       'attendanceRecords',
-      'notebookRecords',
+      'notes',
       'workers',
       'crops',
-      'locations'
+      'locations',
+      'activityTypes',
+      'knowledgeBase',
+      'knowledgeFolders'
     ];
 
     try {
@@ -73,22 +78,24 @@ export default function Management({ user }: { user: User }) {
           <p className="text-emerald-600/60 font-medium mt-1">管理您的农场核心资产与人员</p>
         </div>
 
-        <div className="flex p-1.5 bg-emerald-100/50 rounded-2xl border border-emerald-100 w-fit">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`
-                flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300
-                ${activeTab === tab.id 
-                  ? 'bg-white text-emerald-600 shadow-sm' 
-                  : 'text-emerald-700/50 hover:text-emerald-700'}
-              `}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          ))}
+        <div className="flex p-1.5 bg-emerald-100/50 rounded-2xl border border-emerald-100 w-full overflow-x-auto lg:w-fit scrollbar-hide">
+          <div className="flex min-w-max">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300
+                  ${activeTab === tab.id 
+                    ? 'bg-white text-emerald-600 shadow-sm' 
+                    : 'text-emerald-700/50 hover:text-emerald-700'}
+                `}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -104,6 +111,8 @@ export default function Management({ user }: { user: User }) {
           <CropManagement user={user} hideHeader={true} />
         ) : activeTab === 'locations' ? (
           <LocationManagement user={user} hideHeader={true} />
+        ) : activeTab === 'activityTypes' ? (
+          <ActivityTypeManagement user={user} hideHeader={true} />
         ) : (
           <div className="max-w-2xl mx-auto">
             <div className="bg-white rounded-[2.5rem] p-10 border border-red-100 shadow-xl shadow-red-500/5">
