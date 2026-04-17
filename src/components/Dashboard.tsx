@@ -12,6 +12,7 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
+  Legend,
   LineChart,
   Line,
   Cell,
@@ -19,7 +20,7 @@ import {
   Area
 } from 'recharts';
 import { TrendingUp, Package, Droplets, Calendar, Users, Thermometer, CloudRain, MapPin, ChevronRight, Sprout } from 'lucide-react';
-import { format, subDays, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfYear } from 'date-fns';
+import { format, subDays, subMonths, subYears, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfYear, endOfYear } from 'date-fns';
 import { useCrops } from '../hooks/useCrops';
 import { useLocations } from '../hooks/useLocations';
 import { Link } from 'react-router-dom';
@@ -136,10 +137,22 @@ export default function Dashboard({
     : 0;
   const totalRain = currentMonthWeather.reduce((sum, w) => sum + (w.rainfall || 0), 0);
 
-  const currentYearInterval = { start: startOfYear(now), end: endOfMonth(now) };
-  const currentYearYield = filteredYields
-    .filter(y => isWithinInterval(parseISO(y.date), currentYearInterval))
-    .reduce((sum, y) => sum + y.quantity, 0);
+  const getYearData = (date: Date) => {
+    const interval = { start: startOfYear(date), end: endOfYear(date) };
+    const yearYield = filteredYields
+      .filter(y => isWithinInterval(parseISO(y.date), interval))
+      .reduce((sum, y) => sum + y.quantity, 0);
+    return {
+      label: format(date, 'yyyy年'),
+      yield: yearYield
+    };
+  };
+
+  const lastThreeYearsData = [
+    getYearData(now),
+    getYearData(subYears(now, 1)),
+    getYearData(subYears(now, 2)),
+  ];
 
   // Data processing for charts
   const monthlyStats = Array.from({ length: 6 }, (_, i) => {
@@ -185,7 +198,8 @@ export default function Dashboard({
     return acc;
   }, []);
 
-  const monthNames: string[] = Array.from(new Set(filteredYields.map(y => format(parseISO(y.date), 'MMM yyyy')))).reverse() as string[];
+  const monthNames = Array.from(new Set(filteredYields.map(y => format(parseISO(y.date), 'MMM yyyy'))))
+    .sort((a, b) => new Date(a as string).getTime() - new Date(b as string).getTime()) as string[];
 
   const COLORS = ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -254,10 +268,19 @@ export default function Dashboard({
           color="emerald"
         />
         <StatCard 
-          title="产量 (本年)" 
-          value={`${currentYearYield.toLocaleString()} kg`}
+          title="最近3年产量明细" 
+          value={
+            <div className="space-y-1">
+              {lastThreeYearsData.map((y, i) => (
+                <div key={i} className="flex justify-between items-center gap-4">
+                  <span className="text-sm font-bold text-blue-800/60">{y.label}</span>
+                  <span className="text-lg font-black text-slate-800">{y.yield.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} kg</span>
+                </div>
+              ))}
+            </div>
+          }
           icon={<TrendingUp className="text-blue-600" />}
-          trend={`${selectedCrop} 年度累计`}
+          trend={`${selectedCrop} 年度对比`}
           color="blue"
         />
       </div>
@@ -309,8 +332,21 @@ export default function Dashboard({
                 />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#059669', fontSize: 10, opacity: 0.6 }} />
                 <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: '1px solid #ecfdf5', boxShadow: '0 10px 25px -5px rgb(16 185 129 / 0.1)' }}
-                  formatter={(value: number) => [`${value.toFixed(3)} kg`]}
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    border: '1px solid #ecfdf5', 
+                    boxShadow: '0 10px 25px -5px rgb(16 185 129 / 0.1)',
+                    fontSize: '12px',
+                    fontWeight: 'bold'
+                  }}
+                  itemSorter={(item: any) => -monthNames.indexOf(item.dataKey)}
+                  formatter={(value: number, name: string) => [`${value.toFixed(3)} kg`, name]}
+                />
+                <Legend 
+                  verticalAlign="top" 
+                  align="right" 
+                  iconType="circle"
+                  wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold' }}
                 />
                 {monthNames.map((month, index) => (
                   <Bar 
@@ -340,7 +376,13 @@ export default function Dashboard({
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#059669', fontSize: 10, opacity: 0.6 }} />
                 <Tooltip 
                   contentStyle={{ borderRadius: '16px', border: '1px solid #ecfdf5', boxShadow: '0 10px 25px -5px rgb(16 185 129 / 0.1)' }}
-                  formatter={(value: number) => [`${value} 天`]}
+                  formatter={(value: number, name: string) => [`${value} 天`, name]}
+                />
+                <Legend 
+                  verticalAlign="top" 
+                  align="right" 
+                  iconType="circle"
+                  wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: 'bold' }}
                 />
                 <Bar dataKey="Sunny" name="晴天" stackId="weather" fill="#f59e0b" />
                 <Bar dataKey="Cloudy" name="多云" stackId="weather" fill="#94a3b8" />
