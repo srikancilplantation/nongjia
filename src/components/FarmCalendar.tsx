@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ActivityRecord, OperationType, AttendanceRecord, Worker } from '../types';
-import { handleFirestoreError } from '../utils';
+import { handleFirestoreError, triggerPrint } from '../utils';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, parseISO } from 'date-fns';
@@ -30,10 +30,12 @@ import {
   ClipboardList,
   UserCheck,
   Users,
-  Printer
+  Printer,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLocations } from '../hooks/useLocations';
+import { useActivityTypes } from '../hooks/useActivityTypes';
 import { Crop } from '../types';
 
 type ValuePiece = Date | null;
@@ -52,6 +54,7 @@ export default function FarmCalendar({
   const [selectedDate, setSelectedDate] = useState<Value>(new Date());
   const [loading, setLoading] = useState(true);
   const { locations, loading: locationsLoading } = useLocations(user);
+  const { activityTypes, loading: typesLoading } = useActivityTypes(user);
   const [selectedLocation, setSelectedLocation] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'calendar' | 'report'>('calendar');
   const [reportType, setReportType] = useState<'monthly' | 'yearly'>('monthly');
@@ -66,8 +69,8 @@ export default function FarmCalendar({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<ActivityRecord>>({
-    date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-    type: 'Fertilization',
+    date: format(new Date(), "yyyy-MM-dd"),
+    type: '',
     cropType: '',
     location: '',
     materialUsed: '',
@@ -77,6 +80,12 @@ export default function FarmCalendar({
     notes: '',
     status: 'Completed'
   });
+
+  useEffect(() => {
+    if (activityTypes.length > 0 && !formData.type && !editingId) {
+      setFormData(prev => ({ ...prev, type: activityTypes[0].name }));
+    }
+  }, [activityTypes, formData.type, editingId]);
 
   useEffect(() => {
     if (!user) return;
@@ -103,39 +112,28 @@ export default function FarmCalendar({
   );
 
   const getActivityColor = (type: string) => {
-    switch (type) {
-      case 'Fertilization': return 'bg-emerald-500';
-      case 'Herbicide': return 'bg-amber-500';
-      case 'Fungicide': return 'bg-blue-500';
-      case 'FertilizerWater': return 'bg-teal-500';
-      case 'BactericideWater': return 'bg-cyan-500';
-      case 'TraceElements': return 'bg-indigo-500';
-      default: return 'bg-slate-500';
-    }
+    const activityType = activityTypes.find(t => t.name === type);
+    if (activityType) return activityType.color;
+    
+    if (type.includes('施肥') || type.includes('Fertilization')) return '#10b981';
+    if (type.includes('打草药') || type.includes('Herbicide')) return '#f59e0b';
+    if (type.includes('打菌药') || type.includes('Fungicide')) return '#3b82f6';
+    if (type.includes('打肥水') || type.includes('Fertilizer Water')) return '#14b8a6';
+    if (type.includes('打菌水') || type.includes('Bactericide Water')) return '#06b6d4';
+    if (type.includes('打微量元素') || type.includes('Trace Elements')) return '#6366f1';
+    return '#64748b';
   };
 
   const getActivityBg = (type: string) => {
-    switch (type) {
-      case 'Fertilization': return 'bg-emerald-50 border-emerald-100';
-      case 'Herbicide': return 'bg-amber-50 border-amber-100';
-      case 'Fungicide': return 'bg-blue-50 border-blue-100';
-      case 'FertilizerWater': return 'bg-teal-50 border-teal-100';
-      case 'BactericideWater': return 'bg-cyan-50 border-cyan-100';
-      case 'TraceElements': return 'bg-indigo-50 border-indigo-100';
-      default: return 'bg-slate-50 border-slate-100';
-    }
+    const color = getActivityColor(type);
+    return {
+      backgroundColor: `${color}10`, // 10% opacity
+      borderColor: `${color}30` // 30% opacity
+    };
   };
 
   const getTypeText = (type: string) => {
-    switch (type) {
-      case 'Fertilization': return '施肥';
-      case 'Herbicide': return '打草药';
-      case 'Fungicide': return '打菌药';
-      case 'FertilizerWater': return '打肥水';
-      case 'BactericideWater': return '打菌水';
-      case 'TraceElements': return '打微量元素';
-      default: return '其它工作';
-    }
+    return type;
   };
 
   const tileContent = ({ date, view }: { date: Date, view: string }) => {
@@ -150,7 +148,8 @@ export default function FarmCalendar({
         {dayActivities.map((a, i) => (
           <div 
             key={`act-${i}`} 
-            className={`w-1.5 h-1.5 rounded-full ${getActivityColor(a.type)}`} 
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: getActivityColor(a.type) }}
             title={getTypeText(a.type)} 
           />
         ))}
@@ -219,11 +218,11 @@ export default function FarmCalendar({
   };
 
   const openAddModal = () => {
-    const dateStr = format(selectedDate as Date, "yyyy-MM-dd'T'HH:mm");
+    const dateStr = format(selectedDate as Date, "yyyy-MM-dd");
     setEditingId(null);
     setFormData({
       date: dateStr,
-      type: 'Fertilization',
+      type: activityTypes.length > 0 ? activityTypes[0].name : '',
       cropType: selectedCrop || (crops.length > 0 ? crops[0].name : ''),
       location: locations.length > 0 ? locations[0].name : '',
       materialUsed: '',
@@ -236,17 +235,13 @@ export default function FarmCalendar({
     setIsModalOpen(true);
   };
 
+  const [isPrinting, setIsPrinting] = useState(false);
+
   const handlePrint = () => {
-    console.log("Attempting to print...");
-    window.focus();
-    setTimeout(() => {
-      try {
-        window.print();
-      } catch (e) {
-        console.error("Print failed:", e);
-        alert("打印功能在当前预览窗口受限。请点击右上角按钮‘在新窗口打开’后再试。");
-      }
-    }, 200);
+    setIsPrinting(true);
+    triggerPrint();
+    // Reset printing state after a delay
+    setTimeout(() => setIsPrinting(false), 2000);
   };
 
   return (
@@ -256,7 +251,23 @@ export default function FarmCalendar({
           <h1 className="text-4xl font-display font-black text-emerald-950 tracking-tight">农事日历与记录</h1>
           <p className="text-emerald-600/60 font-medium mt-1">管理您的农活记录与年月报告</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-start">
+          <div className="flex flex-col items-end">
+            <button
+              onClick={handlePrint}
+              disabled={isPrinting}
+              className={`p-2.5 bg-white text-emerald-600 rounded-2xl hover:bg-emerald-50 transition-all border border-emerald-100 shadow-sm flex items-center gap-2 ${isPrinting ? 'opacity-50' : ''}`}
+              title="打印当前视图"
+            >
+              {isPrinting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
+              {isPrinting && <span className="text-xs font-bold">准备打印...</span>}
+            </button>
+            {isPrinting && window.self !== window.top && (
+              <p className="text-[10px] text-amber-600 font-bold mt-2 animate-pulse print:hidden max-w-[150px] text-right">
+                提示：如果打印窗口未弹出，请点击右上角“在新窗口打开”后再试。
+              </p>
+            )}
+          </div>
           <div className="bg-emerald-100/50 p-1 rounded-2xl flex border border-emerald-100">
             <button
               onClick={() => setViewMode('calendar')}
@@ -336,19 +347,14 @@ export default function FarmCalendar({
             <div className="mt-10 pt-8 border-t border-slate-50 space-y-4">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">图例说明</p>
               <div className="grid grid-cols-1 gap-3">
-                {[
-                  { type: 'Fertilization', label: '施肥 (Fertilization)' },
-                  { type: 'FertilizerWater', label: '打肥水 (Fertilizer Water)' },
-                  { type: 'Herbicide', label: '打草药 (Herbicide)' },
-                  { type: 'Fungicide', label: '打菌药 (Fungicide)' },
-                  { type: 'BactericideWater', label: '打菌水 (Bactericide Water)' },
-                  { type: 'TraceElements', label: '打微量元素 (Trace Elements)' },
-                  { type: 'Other', label: '其它工作 (Other)' }
-                ].map((item) => (
-                  <div key={item.type} className="flex items-center justify-between group cursor-default">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2.5 h-2.5 rounded-full ${getActivityColor(item.type)} shadow-sm`} />
-                      <span className="text-xs font-bold text-slate-500 group-hover:text-emerald-600 transition-colors">{item.label}</span>
+                {activityTypes.map((type) => (
+                  <div key={type.id} className="flex items-center justify-between group cursor-default">
+                    <div className="flex items-center gap-4">
+                      <div 
+                        className="w-2.5 h-2.5 rounded-full shadow-sm" 
+                        style={{ backgroundColor: type.color }}
+                      />
+                      <span className="text-xs font-bold text-slate-500 group-hover:text-emerald-600 transition-colors">{type.name}</span>
                     </div>
                     <div className={`h-1 w-0 group-hover:w-8 bg-emerald-100 rounded-full transition-all duration-300`} />
                   </div>
@@ -402,10 +408,14 @@ export default function FarmCalendar({
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         key={a.id} 
-                        className={`p-5 border-2 rounded-2xl flex items-center justify-between gap-4 transition-all hover:shadow-md ${getActivityBg(a.type)}`}
+                        className="p-5 border-2 rounded-2xl flex items-center justify-between gap-4 transition-all hover:shadow-md"
+                        style={getActivityBg(a.type)}
                       >
                         <div className="flex items-center gap-5">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${getActivityColor(a.type)}`}>
+                          <div 
+                            className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm"
+                            style={{ backgroundColor: getActivityColor(a.type) }}
+                          >
                             <Droplets className="w-7 h-7 text-white" />
                           </div>
                           <div>
@@ -520,10 +530,12 @@ export default function FarmCalendar({
               <button
                 type="button"
                 onClick={handlePrint}
-                className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all border border-emerald-100 cursor-pointer"
+                disabled={isPrinting}
+                className={`p-3 bg-emerald-50 text-emerald-600 rounded-2xl hover:bg-emerald-100 transition-all border border-emerald-100 cursor-pointer flex items-center gap-2 ${isPrinting ? 'opacity-50' : ''}`}
                 title="打印报告"
               >
-                <Printer className="w-5 h-5" />
+                {isPrinting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}
+                {isPrinting && <span className="text-xs font-bold">准备打印...</span>}
               </button>
             </div>
           </div>
@@ -569,10 +581,10 @@ export default function FarmCalendar({
                     .map(a => (
                       <tr key={a.id} className="hover:bg-emerald-50/30 transition-all group">
                         <td className="px-8 py-6 text-xs font-black text-emerald-900/40 font-mono whitespace-nowrap">
-                          {format(parseISO(a.date), reportType === 'monthly' ? 'MM-dd HH:mm' : 'yyyy-MM-dd HH:mm')}
+                          {format(parseISO(a.date), 'yyyy-MM-dd')}
                         </td>
                         <td className="px-8 py-6">
-                          <span className={`text-[10px] font-black px-3 py-1.5 rounded-xl text-white shadow-sm ${getActivityColor(a.type)}`}>
+                          <span className="text-sm font-bold text-emerald-950">
                             {getTypeText(a.type)}
                           </span>
                         </td>
@@ -623,15 +635,15 @@ export default function FarmCalendar({
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden"
+              className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center flex-shrink-0">
                 <h2 className="text-xl font-bold text-slate-800">{editingId ? '编辑活动' : '新增农事活动'}</h2>
                 <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
                 {submitError && (
                   <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-xs rounded-xl">
                     {submitError}
@@ -639,9 +651,9 @@ export default function FarmCalendar({
                 )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700">日期时间</label>
+                    <label className="text-sm font-medium text-slate-700">日期</label>
                     <input
-                      type="datetime-local"
+                      type="date"
                       required
                       value={formData.date}
                       onChange={e => setFormData({ ...formData, date: e.target.value })}
@@ -652,16 +664,12 @@ export default function FarmCalendar({
                     <label className="text-sm font-medium text-slate-700">活动类型</label>
                     <select
                       value={formData.type}
-                      onChange={e => setFormData({ ...formData, type: e.target.value as any })}
+                      onChange={e => setFormData({ ...formData, type: e.target.value })}
                       className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                     >
-                      <option value="Fertilization">施肥 (Fertilization)</option>
-                      <option value="FertilizerWater">打肥水 (Fertilizer Water)</option>
-                      <option value="Herbicide">打草药 (Herbicide)</option>
-                      <option value="Fungicide">打菌药 (Fungicide)</option>
-                      <option value="BactericideWater">打菌水 (Bactericide Water)</option>
-                      <option value="TraceElements">打微量元素 (Trace Elements)</option>
-                      <option value="Other">其它工作</option>
+                      {activityTypes.map(type => (
+                        <option key={type.id} value={type.name}>{type.name}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
