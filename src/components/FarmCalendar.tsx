@@ -717,10 +717,9 @@ export default function FarmCalendar({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-700">使用材料 (肥料/药名)</label>
+                  <label className="text-sm font-medium text-slate-700">使用材料 (肥料/药名) (可选)</label>
                   <input
                     type="text"
-                    required
                     placeholder="例如: 15-15-15, 草甘膦"
                     value={formData.materialUsed}
                     onChange={e => setFormData({ ...formData, materialUsed: e.target.value })}
