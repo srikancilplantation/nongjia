@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ActivityRecord, OperationType, AttendanceRecord, Worker } from '../types';
-import { handleFirestoreError, triggerPrint } from '../utils';
+import { handleFirestoreError, triggerPrint, getTypeText } from '../utils';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { format, isSameDay, parseISO } from 'date-fns';
@@ -60,6 +60,7 @@ export default function FarmCalendar({
   const [reportType, setReportType] = useState<'monthly' | 'yearly'>('monthly');
   const [reportYear, setReportYear] = useState(new Date().getFullYear());
   const [reportMonth, setReportMonth] = useState(new Date().getMonth() + 1);
+  const [reportActivityType, setReportActivityType] = useState<string>('All');
   
   // Modal state for adding/editing activities
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -130,10 +131,6 @@ export default function FarmCalendar({
       backgroundColor: `${color}10`, // 10% opacity
       borderColor: `${color}30` // 30% opacity
     };
-  };
-
-  const getTypeText = (type: string) => {
-    return type;
   };
 
   const tileContent = ({ date, view }: { date: Date, view: string }) => {
@@ -519,13 +516,27 @@ export default function FarmCalendar({
                     </select>
                   </div>
                 )}
+
+                <div className="flex items-center gap-3">
+                  <label className="text-[10px] font-black text-emerald-900/40 uppercase tracking-[0.2em]">活动类型</label>
+                  <select 
+                    value={reportActivityType}
+                    onChange={(e) => setReportActivityType(e.target.value)}
+                    className="bg-emerald-50/50 border border-emerald-100 rounded-xl px-4 py-2 text-sm font-black text-emerald-700 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                  >
+                    <option value="All">全部类型</option>
+                    {activityTypes.map(type => (
+                      <option key={type.id} value={type.name}>{type.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3 text-emerald-600/60 text-[10px] font-black uppercase tracking-[0.2em] bg-emerald-50/50 px-5 py-3 rounded-2xl border border-emerald-100">
                 <Info className="w-4 h-4" />
-                <span>{selectedCrop} · {selectedLocation === 'All' ? '全部地点' : selectedLocation}</span>
+                <span>{selectedCrop} · {selectedLocation === 'All' ? '全部地点' : selectedLocation} · {reportActivityType === 'All' ? '全部活动' : reportActivityType}</span>
               </div>
               <button
                 type="button"
@@ -573,9 +584,17 @@ export default function FarmCalendar({
                       const date = parseISO(a.date);
                       const cropMatch = a.cropType === selectedCrop;
                       const locationMatch = selectedLocation === 'All' ? true : a.location === selectedLocation;
+                      
+                      // More robust type matching
+                      const normalize = (s: string) => (s || '').split(/[ \((]/)[0].trim().toLowerCase();
+                      const typeMatch = reportActivityType === 'All' ? true : (
+                        a.type === reportActivityType || 
+                        normalize(a.type) === normalize(reportActivityType)
+                      );
+
                       const yearMatch = date.getFullYear() === reportYear;
                       const monthMatch = reportType === 'monthly' ? (date.getMonth() + 1 === reportMonth) : true;
-                      return cropMatch && locationMatch && yearMatch && monthMatch;
+                      return cropMatch && locationMatch && typeMatch && yearMatch && monthMatch;
                     })
                     .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
                     .map(a => (
@@ -603,9 +622,16 @@ export default function FarmCalendar({
                     const date = parseISO(a.date);
                     const cropMatch = a.cropType === selectedCrop;
                     const locationMatch = selectedLocation === 'All' ? true : a.location === selectedLocation;
+                    
+                    const normalize = (s: string) => (s || '').split(/[ \((]/)[0].trim().toLowerCase();
+                    const typeMatch = reportActivityType === 'All' ? true : (
+                      a.type === reportActivityType || 
+                      normalize(a.type) === normalize(reportActivityType)
+                    );
+
                     const yearMatch = date.getFullYear() === reportYear;
                     const monthMatch = reportType === 'monthly' ? (date.getMonth() + 1 === reportMonth) : true;
-                    return cropMatch && locationMatch && yearMatch && monthMatch;
+                    return cropMatch && locationMatch && typeMatch && yearMatch && monthMatch;
                   }).length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-8 py-24 text-center text-emerald-200 font-black uppercase tracking-[0.3em] italic">
