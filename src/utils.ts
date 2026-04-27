@@ -49,3 +49,32 @@ export function triggerPrint() {
   }
 }
 
+export const getTypeText = (type: string) => {
+  if (!type) return '其它工作';
+  
+  // Handle the naming convention: "Name (English)"
+  const mainName = type.split(' (')[0];
+  
+  switch (mainName) {
+    case 'Fertilization':
+    case '施肥': 
+      return '施肥';
+    case 'Herbicide':
+    case '打草药': 
+      return '打草药';
+    case 'Fungicide':
+    case '打菌药': 
+      return '打菌药';
+    case 'FertilizerWater':
+    case '打肥水': 
+      return '打肥水';
+    case 'BactericideWater':
+    case '打菌水': 
+      return '打菌水';
+    case 'TraceElements':
+    case '打微量元素': 
+      return '打微量元素';
+    default: 
+      return mainName || '其它工作';
+  }
+};
