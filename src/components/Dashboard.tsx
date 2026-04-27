@@ -3,7 +3,7 @@ import { User } from 'firebase/auth';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { YieldRecord, ActivityRecord, WeatherRecord, AttendanceRecord, OperationType } from '../types';
-import { handleFirestoreError } from '../utils';
+import { handleFirestoreError, getTypeText } from '../utils';
 import { 
   BarChart, 
   Bar, 
@@ -19,7 +19,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { TrendingUp, Package, Droplets, Calendar, Users, Thermometer, CloudRain, MapPin, ChevronRight, Sprout } from 'lucide-react';
+import { TrendingUp, Package, Droplets, Calendar, Users, Thermometer, CloudRain, MapPin, ChevronRight, Sprout, Check } from 'lucide-react';
 import { format, subDays, subMonths, subYears, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfYear, endOfYear } from 'date-fns';
 import { useCrops } from '../hooks/useCrops';
 import { useLocations } from '../hooks/useLocations';
@@ -42,6 +42,8 @@ export default function Dashboard({
   const [weather, setWeather] = useState<WeatherRecord[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [matrixActivityFilter, setMatrixActivityFilter] = useState<string>('All');
+  const [matrixYear, setMatrixYear] = useState<number>(new Date().getFullYear());
   const { locations, loading: locationsLoading } = useLocations(user);
 
   useEffect(() => {
@@ -130,6 +132,23 @@ export default function Dashboard({
 
   const pendingActivities = filteredActivities.filter(a => a.status === 'Pending');
   const pendingActivitiesCount = pendingActivities.length;
+
+  // Matrix data for annual activity completion
+  const uniqueActivityTypes = Array.from(new Set(filteredActivities.map(a => getTypeText(a.type)))).sort() as string[];
+  const months = Array.from({ length: 12 }, (_, i) => i);
+
+  const isActivityCompleted = (locationName: string, month: number, typeFilter: string) => {
+    return filteredActivities.some(a => {
+      const date = parseISO(a.date);
+      const isCorrectYear = date.getFullYear() === matrixYear;
+      const isCorrectMonth = date.getMonth() === month;
+      const isCorrectLocation = a.location === locationName;
+      const isCorrectStatus = a.status === 'Completed';
+      const isCorrectType = typeFilter === 'All' ? true : getTypeText(a.type) === typeFilter;
+      
+      return isCorrectYear && isCorrectMonth && isCorrectLocation && isCorrectStatus && isCorrectType;
+    });
+  };
 
   const currentMonthWeather = weather.filter(w => isWithinInterval(parseISO(w.date), currentMonthInterval));
   const avgTemp = currentMonthWeather.length > 0 
@@ -227,18 +246,6 @@ export default function Dashboard({
       </div>
     );
   }
-
-  const getTypeText = (type: string) => {
-    switch (type) {
-      case 'Fertilization': return '施肥';
-      case 'Herbicide': return '打草药';
-      case 'Fungicide': return '打菌药';
-      case 'FertilizerWater': return '打肥水';
-      case 'BactericideWater': return '打菌水';
-      case 'TraceElements': return '打微量元素';
-      default: return '其它工作';
-    }
-  };
 
   return (
     <div className="space-y-8">
@@ -431,44 +438,90 @@ export default function Dashboard({
         </div>
       )}
 
-      {/* Recent Activity List */}
+      {/* Annual Farm Activity Matrix */}
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100">
-        <h3 className="text-lg font-bold text-emerald-950 mb-6 flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-emerald-500" />
-          最近农场动态
-        </h3>
-        <div className="space-y-3">
-          {[
-            ...filteredYields.slice(0, 3).map(y => ({ ...y, dashboardType: 'yield' as const })),
-            ...filteredActivities.slice(0, 3).map(a => ({ ...a, dashboardType: 'activity' as const }))
-          ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5).map((item, idx) => (
-            <div key={idx} className="flex items-center justify-between p-4 hover:bg-emerald-50/50 rounded-xl transition-colors border border-transparent hover:border-emerald-100">
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${item.dashboardType === 'yield' ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-                  {item.dashboardType === 'yield' ? <TrendingUp className="w-5 h-5 text-emerald-500" /> : <Droplets className="w-5 h-5 text-amber-500" />}
-                </div>
-                <div>
-                  <p className="font-bold text-emerald-950">
-                    {item.dashboardType === 'yield' ? `${(item as YieldRecord).cropType} 收成` : getTypeText((item as ActivityRecord).type)}
-                  </p>
-                  <p className="text-xs text-emerald-600/60">{format(parseISO(item.date), 'yyyy-MM-dd')}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className={`font-black ${item.dashboardType === 'yield' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {item.dashboardType === 'yield' ? `${(item as YieldRecord).quantity} ${(item as YieldRecord).unit}` : (item as ActivityRecord).materialUsed}
-                </p>
-                <div className="flex flex-col items-end">
-                  <p className="text-[10px] text-emerald-400 uppercase tracking-wider">地点: {item.location}</p>
-                </div>
-              </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <h3 className="text-lg font-bold text-emerald-950 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-emerald-500" />
+            {matrixYear}年 农事年度完成情况
+          </h3>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={matrixYear}
+              onChange={(e) => setMatrixYear(parseInt(e.target.value))}
+              className="px-3 py-1.5 rounded-lg border border-emerald-100 text-xs font-bold text-emerald-900 bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              {[0, 1, 2].map(i => {
+                const year = now.getFullYear() - i;
+                return <option key={year} value={year}>{year}年</option>;
+              })}
+            </select>
+            <select
+              value={matrixActivityFilter}
+              onChange={(e) => setMatrixActivityFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-emerald-100 text-xs font-bold text-emerald-900 bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[150px]"
+            >
+              <option value="All">所有活动类型</option>
+              {uniqueActivityTypes.map(type => (
+                <option key={type} value={type}>{type}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-emerald-50">
+                <th className="py-3 px-2 text-[10px] font-black text-emerald-800/40 uppercase tracking-widest sticky left-0 bg-white z-10 min-w-[120px]">地点</th>
+                {months.map(m => (
+                  <th key={m} className="py-3 px-1 text-[10px] font-black text-emerald-800/40 uppercase tracking-widest text-center min-w-[40px]">
+                    {m + 1}月
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-emerald-50">
+              {locationsLoading ? (
+                <tr>
+                  <td colSpan={13} className="py-10 text-center text-emerald-300 animate-pulse">加载地点数据...</td>
+                </tr>
+              ) : locations.length === 0 ? (
+                <tr>
+                  <td colSpan={13} className="py-10 text-center text-emerald-300">暂无地点记录</td>
+                </tr>
+              ) : (
+                locations.map((loc) => (
+                  <tr key={loc.id} className="hover:bg-emerald-50/30 transition-colors">
+                    <td className="py-4 px-2 font-bold text-emerald-900 sticky left-0 bg-white group-hover:bg-emerald-50/30 z-10 border-r border-emerald-50">{loc.name}</td>
+                    {months.map(m => {
+                      const completed = isActivityCompleted(loc.name, m, matrixActivityFilter);
+                      return (
+                        <td key={m} className="py-4 px-1 text-center">
+                          {completed && (
+                            <div className="flex justify-center">
+                              <div className="w-6 h-6 rounded-full bg-emerald-50 flex items-center justify-center border border-emerald-100">
+                                <Check className="w-4 h-4 text-emerald-500 stroke-[3]" />
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-4 flex items-center gap-4 text-[10px] text-emerald-600/60 font-medium">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+              <Check className="w-2 h-2 text-emerald-500" />
             </div>
-          ))}
-          {filteredYields.length === 0 && filteredActivities.length === 0 && (
-            <div className="text-center py-10 text-emerald-300">
-              暂无动态记录
-            </div>
-          )}
+            <span>代表该月有已完成记录</span>
+          </div>
+          <p>* 仅显示状态为“已完成”的记录</p>
         </div>
       </div>
     </div>
