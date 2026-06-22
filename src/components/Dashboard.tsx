@@ -491,7 +491,9 @@ export default function Dashboard({
                   <td colSpan={13} className="py-10 text-center text-emerald-300">暂无地点记录</td>
                 </tr>
               ) : (
-                locations.map((loc) => (
+                [...locations].sort((a, b) => 
+                  (a.name || '').localeCompare(b.name || '', undefined, { numeric: true, sensitivity: 'base' })
+                ).map((loc) => (
                   <tr key={loc.id} className="hover:bg-emerald-50/30 transition-colors">
                     <td className="py-4 px-2 font-bold text-emerald-900 sticky left-0 bg-white group-hover:bg-emerald-50/30 z-10 border-r border-emerald-50">{loc.name}</td>
                     {months.map(m => {
