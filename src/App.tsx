@@ -25,7 +25,10 @@ import {
   Calendar as CalendarIcon,
   UserCheck,
   Users,
-  StickyNote
+  StickyNote,
+  ExternalLink,
+  ShieldAlert,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Dashboard from './components/Dashboard';
@@ -41,6 +44,14 @@ import Notebook from './components/Notebook';
 import { useCrops } from './hooks/useCrops';
 
 const provider = new GoogleAuthProvider();
+
+// Allowed authorized users list (strictly restricted to owner)
+const ALLOWED_EMAILS = ['srikancil.plantation@gmail.com'];
+
+const isAuthorizedUser = (user: User | null) => {
+  if (!user || !user.email) return false;
+  return ALLOWED_EMAILS.includes(user.email.toLowerCase());
+};
 
 async function testConnection() {
   try {
@@ -121,7 +132,7 @@ export default function App() {
           className="bg-white p-10 rounded-[2.5rem] shadow-2xl shadow-emerald-200/50 max-w-md w-full text-center border border-emerald-100"
         >
           {/* New Sun and Leaf Emblem Logo */}
-          <div className="w-32 h-32 mx-auto mb-8 relative flex items-center justify-center">
+          <div className="w-32 h-32 mx-auto mb-6 relative flex items-center justify-center">
             <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-2xl">
               <defs>
                 <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -183,10 +194,15 @@ export default function App() {
           <h1 className="text-4xl font-black text-emerald-950 mb-1 tracking-tight">
             农事<span className="text-emerald-600">管家</span>
           </h1>
-          <div className="flex items-center justify-center gap-3 mb-6">
+          <div className="flex items-center justify-center gap-3 mb-4">
             <div className="h-[1px] w-12 bg-emerald-100"></div>
             <p className="text-emerald-700 font-bold tracking-[0.4em] uppercase text-[9px]">Smart Farm Manager</p>
             <div className="h-[1px] w-12 bg-emerald-100"></div>
+          </div>
+
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200/80 rounded-full text-amber-800 text-[11px] font-medium mb-6">
+            <Lock className="w-3 h-3 text-amber-600" />
+            <span>私有专享模式（仅限授权账号登录）</span>
           </div>
 
           {loginError && (
@@ -202,7 +218,43 @@ export default function App() {
             <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
               <ChevronRight className="w-4 h-4" />
             </div>
-            <span>进入管理系统</span>
+            <span>管理员 Google 账号登录</span>
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Access denied for non-authorized user
+  if (!isAuthorizedUser(user)) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white p-8 sm:p-10 rounded-[2rem] shadow-xl max-w-md w-full text-center border border-slate-100"
+        >
+          <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-6 text-amber-600">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">未授权访问</h2>
+          <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+            本农事管家应用目前处于私有保护模式，不对外开放使用。<br />
+            仅限所有者账号（<span className="font-semibold text-slate-700">srikancil.plantation@gmail.com</span>）访问。
+          </p>
+
+          <div className="bg-slate-50 rounded-xl p-4 mb-6 text-left border border-slate-100">
+            <p className="text-xs text-slate-400 font-medium mb-1">当前登录账号：</p>
+            <p className="text-sm font-semibold text-slate-700 truncate">{user.email || '未知用户'}</p>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="w-full py-3.5 px-6 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-md"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>切换账号 / 退出登录</span>
           </button>
         </motion.div>
       </div>
@@ -257,7 +309,7 @@ export default function App() {
               </button>
             </div>
 
-            <nav className="flex-1 space-y-1">
+            <nav className="flex-1 space-y-1 overflow-y-auto pr-2 custom-scrollbar">
               {/* Global Crop Selector in Sidebar */}
               {crops.length > 0 && (
                 <div className="mb-6 px-2">
@@ -326,6 +378,15 @@ export default function App() {
             <h2 className="text-lg font-bold text-emerald-950 ml-4 lg:ml-0">
               <RouteTitle />
             </h2>
+            {window.self !== window.top && location.pathname !== '/' && (
+              <button 
+                onClick={() => window.open(window.location.href, '_blank')}
+                className="ml-auto flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 border border-amber-100 rounded-lg text-xs font-bold hover:bg-amber-100 transition-all shadow-sm animate-pulse"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>在新窗口打开 (解决打印问题)</span>
+              </button>
+            )}
           </header>
 
           <div className="flex-1 overflow-y-auto p-6 lg:p-10">
